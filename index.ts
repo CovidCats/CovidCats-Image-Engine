@@ -1,168 +1,106 @@
-// Script to input desired traits, and generate final NFT image
+// Before using this script, need to sync Moralis server to the smart contract and Mint event
 
-import * as fs from "fs"
-const { createCanvas, loadImage } = require('canvas')
-import { save_image_to_ipfs } from "./save_image_to_ipfs"
+require("dotenv").config();
+const Moralis  = require('moralis/node');
+const { createImage } = require('./index')
+const { save_metadata_to_ipfs } = require("./save_metadata_to_ipfs")
 
-interface RenderObject {
-    layer: {
-        name: string;
-        blend: string;
-        opacity: number;
-        selectedElement: ImageElement
+// const serverUrl = process.env.SERVER;
+// const appId = process.env.APP_ID;
+
+const ADDRESS = "0xAa00A05F3E8F113A41f54585Ffe2bbdae8063E25";
+
+// keccak256 hash of "Mint(address,uint256,string[6])"
+const TOPIC = "0x0aa92b279e6b3b794e75bbdb88eba15818573a03c790e2aefb3f7e4e5cefb123";
+
+const main = async () => {
+    Moralis.start({ serverUrl, appId });
+
+    // Grab metadata on NFT contract
+    const options = { address: ADDRESS, chain: "rinkeby" };
+    const metaData = await Moralis.Web3API.token.getNFTMetadata(options);
+    console.log("TOKEN meta: ", metaData);
+
+    // Unused?
+    const extendedOptions = {address: ADDRESS, chain: "rinkeby", topic: TOPIC};
+
+    // Obtain last 19 or less mint events (will be stored as table rows on Moralis database)
+    const Mint = Moralis.Object.extend("mint");
+    const query = new Moralis.Query(Mint);
+    query.limit(19);
+    const results = await query.find();
+    console.log("Successfully retrieved " + results.length + " mint events");
+
+    // Run through query results, and console log the traits for each Mint event
+    for (let i = 0; i < results.length; i++) {
+        let object = results[i];
+        object = {...object, ...JSON.parse(JSON.stringify(object))};
+        console.log(object.id + ' traits - ' + object.traits);
+        console.log(object)
     }
-    loadedImage: object;
-}
 
-interface ImageElement {
-    id: number;
-    name: string;
-    filename: string;
-    path: string;
-}
-
-interface Layer {
-    id: number;
-    elements: ImageElement[];
-    name: string;
-    blend: string;
-}
-
-const basePath = process.cwd();
-const buildDir = `${basePath}/build`;
-const layersDir = `${basePath}/layers`;
-
-const canvas = createCanvas(2048, 2048)
-const ctx = canvas.getContext('2d')
-
-// Array representing desired image layers from bottom to top
-const layersOrder: {name: string}[] = [
-    { name: "Face" },
-    { name: "Ear" },
-    { name: "Mouth" },
-    { name: "Eye" },
-    { name: "Whisker" },
-    { name: "Mask" }
-];
-
-// Input desired traits here
-// e.g. createImages(1, 1, 1, 1, 1, 1) => face1.png + ear1.png + mouth1.png + eye1.png + whisker1.png + mask1.png
-// createImage(3, 4, 3, 4, 5, 3);
-
-// Unsure how to handle "UnhandledPromiseRejection" when giving input to elementsSetup() that doesn't exist
-export async function createImage(face: number, ear: number, mouth: number, eye: number, whisker: number, mask: number) {
     
-    const results = elementsSetup(face, ear, mouth, eye, whisker, mask);
 
-    // Load trait images
-    let loadedElements: Promise<any>[] = [];
+    // Create event handler for new entry in "mint" table on Moralis server
+    let subscription = await query.subscribe();
+    console.log("EVENT LISTENER STARTED FOR MINT EVENT")
 
-    results.forEach((layer) => {
-        loadedElements.push(loadLayerImg(layer));
-      });
+    subscription.on('create', (object: any) => {    
+        object = {...object, ...JSON.parse(JSON.stringify(object))};
+        console.log(object.id + ' traits - ' + object.traits);
+        console.log('object created');
 
-    await Promise.all(loadedElements)
-        // .then((renderObjectArray: {layer:{name: string, blend: string, opacity: number, selectedElement: {id: number, name: string, filename: string, path: string}}, loadedImage:object}[]) => {
-        .then((renderObjectArray: RenderObject[]) => {
-            
-            // Delete previous canvas, and create new canvas with white background
-            ctx.clearRect(0, 0, 2048, 2048);
-            ctx.fillStyle = "#FFFFFF";
-            ctx.fillRect(0, 0, 2048, 2048);
-            
-            // Create image file by layering trait images on top in the specified order
-            renderObjectArray.forEach((renderObject, index) => {drawElement(renderObject, index)});
+        // Mapping of traits to number, otherwise will have to modify index.ts so that createImage() takes strings as arguments rather than number
 
-            // Save image file to 0.png in root directory
-            // fs.writeFileSync(`${basePath}/0.png`, canvas.toBuffer("image/png"))
-        })
-    
-    const ipfs_link = await save_image_to_ipfs(canvas)
-    return ipfs_link;
-}
+        // Feed traits into image engine
+        // createImage(object.traits[0], object.traits[1], object.traits[2], object.traits[3], object.traits[4], object.traits[5])
 
-function drawElement (_renderObject: RenderObject, _index: number) {
-    ctx.globalAlpha = _renderObject.layer.opacity;
-    ctx.globalCompositeOperation = _renderObject.layer.blend;
-    ctx.drawImage(_renderObject.loadedImage, 0, 0, 2048, 2048);
-}
-
-async function loadLayerImg (_layer: { selectedElement: { path: string; } | undefined; } | undefined) {
-    return new Promise(async (resolve) => {
-        const image = await loadImage(`${_layer?.selectedElement?.path}`);
-        resolve({ layer: _layer, loadedImage: image });
-    })
-}
-
-// Input which specific elements you want to compose the image
-// E.g. Inputting (1, 1, 1, 1, 1, 1) means inputting face1.png, ear1.png, mouth1.png, and so on into the image engine
-// Returns array to put into image engine
-// TO-DO: Intend to modify function to take strings correlating to trait name in the future
-function elementsSetup (face: number, ear: number, mouth: number, eye: number, whisker: number, mask: number) {
-    const elementNames = ["face", "ear", "mouth", "eye", "whisker", "mask"]
-    const elementArray = [face, ear, mouth, eye, whisker, mask]
-    
-    const imageArray = layersSetup(layersOrder).map((layer, index) => {
+        // Get image IPFS link
+        const image_ipfs_link = createImage(1,1,1,1,1,1)
         
-        const elementPicked: number | undefined = elementArray[index]
-        if (!elementPicked) {throw "Invalid input"}
+        // Generate metadata
+        const metaData = {
+                            "name": `Covid Cat #${object.tokenId}`,
+                            "attributes": [
+                                {
+                                    "trait_type": "Ear",
+                                    "value": "gold"
+                                },
+                                {
+                                    "trait_type": "Eye",
+                                    "value": "oni's head protector"
+                                },
+                                {
+                                    "trait_type": "Face",
+                                    "value": "santa puffer jacket"
+                                },
+                                {
+                                    "trait_type": "Mask",
+                                    "value": "azure"
+                                },
+                                {
+                                    "trait_type": "Mouth",
+                                    "value": "Cosmic"
+                                },
+                                {
+                                    "trait_type": "Whisker",
+                                    "value": "red protective arm"
+                                },
+                            ],
+                            "description": "",
+                            "external_url": "https://covidcats.art/",
+                            "image": image_ipfs_link
+                        }
 
-        if (!layer.elements[elementPicked]) {
-            throw `Your selected ${elementNames[index]} doesn't exist`
-        }
+        // Save metadata to IPFS
+        const metadata_ipfs_link = save_metadata_to_ipfs(metaData)
 
-        return {
-            name: layer.name,
-            blend: layer.blend,
-            opacity: 1,
-            selectedElement: layer.elements[elementPicked]
-        }
-    })
+        // Get metadata IPFS link, and update tokenURI
 
-    return imageArray;
+    });    
 }
 
-// Expand layersOrder array to prepare for image engine
-function layersSetup (layersOrder: {name: string}[]) {
-    
-    const layers: Layer[] = layersOrder.map((layerObj, index) => ({
-        id: index,
-        elements: getElements(`${layersDir}/${layerObj.name}/`),
-        name: layerObj.name,
-        blend: 'source-over'
-    }))
-
-    return layers
-}
-
-// Given path to image folder, return array of objects representing each image file
-function getElements (path: string) {
-    return fs
-        .readdirSync(path)
-        .filter((item: string) => !/(^|\/)\.[^\/\.]/g.test(item))
-        .map((i: string, index: number)=> {
-            return {
-                id: index,
-                name: i.slice(0, -4),
-                filename: i,
-                path: `${path}${i}`
-        }
-    })
-}
-
-// Set up build directory to place images in
-// If have pre-existing build directory, delete it
-// function buildSetup () {
-//     if (fs.existsSync(buildDir)) {
-//       fs.rmdirSync(buildDir, { recursive: true });
-//     }
-//     fs.mkdirSync(buildDir);
-//     fs.mkdirSync(`${buildDir}/json`);
-//     fs.mkdirSync(`${buildDir}/images`);
-// };
-
-// // Save current canvas to .png file in build directory
-// // _editionCount = name of .png file
-// function saveImage (_editionCount: number) {
-//     fs.writeFileSync(`${buildDir}/images/${_editionCount}.png`, canvas.toBuffer("image/png"));
-// };
+main().catch((error) => {
+    console.error(error);
+    process.exitCode = 1;
+  });
