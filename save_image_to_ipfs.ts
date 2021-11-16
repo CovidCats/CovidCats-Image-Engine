@@ -15,7 +15,9 @@ export async function save_image_to_ipfs (_canvas: any) {
   const raw_image_2 = "data:image/png;base64," + raw_image.toString("base64")
   file = new Moralis.File("image.png", {base64 : raw_image_2 });
   await file.saveIPFS({ useMasterKey: true });
-  console.log(file.ipfs())  
+  const IPFS_link = file.ipfs();
+  console.log(IPFS_link)
+  return IPFS_link
 }
 
 // export async function send_image_to_ipfs () {
