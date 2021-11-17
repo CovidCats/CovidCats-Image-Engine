@@ -13,13 +13,5 @@ Layer Order:
 - Whiskers
 - Mask
 
-To generate an NFT .png file based on desired traits, go to line 49 of index.ts and alter the numbers
 
-`createImages(3, 4, 3, 4, 5, 3);` 
-
-=> "face3.png + ear4.png + mouth3.png + eye4.png + whisker5.png + mask3.png"
-
-
-Then run `npx ts-node index`
-
-This will create 0.png in the root directory with the desired traits
+To start an event listener for Mint event on CovidCats.sol contract, that will console log a tokenURI string for each Mint even it picks up, run `npx ts-node index`
