@@ -13,7 +13,6 @@ export async function save_metadata_to_ipfs(_metadata: object) {
   await file.saveIPFS({ useMasterKey: true });
   const read_file = JSON.parse(JSON.stringify(file))
   const IPFS_link = read_file.ipfs;
-  console.log(IPFS_link)
   return IPFS_link
 }
 
