@@ -3,14 +3,12 @@
 
 <img src="https://raw.githubusercontent.com/kyzooghost/CovidCats-Image-Engine/main/images/homecat.png" width="512" height="512" />
 
-To upload all /layer .png files to a single IPFS folder: `npx ts-node image_to_ipfs`
-
 Layer Order:
 - Face
-- Ears
+- Ear
 - Mouth
 - Eyes
-- Whiskers
+- Accessory
 - Mask
 
 

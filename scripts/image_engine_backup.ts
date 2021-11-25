@@ -29,8 +29,9 @@ interface Layer {
 }
 
 const basePath = process.cwd();
-const buildDir = `${basePath}/build`;
 const layersDir = `${basePath}/layers`;
+const deltaLayersDir = `${basePath}/layers_delta`;
+const regularLayersDir = `${basePath}/layers_regular`;
 
 const canvas = createCanvas(2048, 2048)
 const ctx = canvas.getContext('2d')
@@ -40,8 +41,8 @@ const layersOrder: {name: string}[] = [
     { name: "Face" },
     { name: "Ear" },
     { name: "Mouth" },
-    { name: "Eye" },
-    { name: "Whisker" },
+    { name: "Eyes" },
+    { name: "Accessory" },
     { name: "Mask" }
 ];
 
