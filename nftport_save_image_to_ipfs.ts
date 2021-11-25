@@ -1,3 +1,5 @@
+// THIS SCRIPT CURRENTLY NOT WORKING IN TYPESCRIPT
+
 require("dotenv").config();
 const fs = require('fs');
 import axios from "axios";
